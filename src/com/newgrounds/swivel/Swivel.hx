@@ -179,21 +179,90 @@ class Swivel extends Application
 	private var _cmdLineFile : File;
 	private var _cmdLineParams : Dynamic;
 	private var _cmdLineDirectory : File;
-	
+	private var _cmdLineFps : Null<Float>;
+
+	/**
+	 * Translate long-form CLI flags (--input, --output, --fps, --width, --height)
+	 * to the short-form flags understood by parseNextArgument, then run normally.
+	 *
+	 * Long flags accepted:
+	 *   --input  <file>    SWF input file (equivalent to positional arg)
+	 *   --output <file>    MP4 output path (equivalent to -o)
+	 *   --fps    <n>       Override SWF frame-rate (stored, applied after load)
+	 *   --width  <n>       Output width in pixels (combined with height as -s WxH)
+	 *   --height <n>       Output height in pixels
+	 */
+	private function normalizeLongArgs(args : Array<String>) : Array<String> {
+		var out : Array<String> = [];
+		var i = 0;
+		var pendingWidth  : Null<String> = null;
+		var pendingHeight : Null<String> = null;
+
+		while (i < args.length) {
+			var a = args[i];
+			switch (a) {
+				case "--input":
+					i++;
+					if (i < args.length) out.push(args[i]);  // positional: file path
+					else throw("--input requires a value");
+				case "--output":
+					i++;
+					if (i < args.length) { out.push("-o"); out.push(args[i]); }
+					else throw("--output requires a value");
+				case "--fps":
+					i++;
+					if (i < args.length) {
+						var fps = Std.parseFloat(args[i]);
+						if (Math.isNaN(fps) || fps <= 0) throw("--fps requires a positive numeric value");
+						_cmdLineFps = fps;
+					} else {
+						throw("--fps requires a value");
+					}
+				case "--width":
+					i++;
+					if (i < args.length) pendingWidth = args[i];
+					else throw("--width requires a value");
+				case "--height":
+					i++;
+					if (i < args.length) pendingHeight = args[i];
+					else throw("--height requires a value");
+				default:
+					out.push(a);
+			}
+			i++;
+		}
+
+		// Emit -s WxH only when at least one dimension was supplied.
+		if (pendingWidth != null || pendingHeight != null) {
+			var w = pendingWidth  != null ? pendingWidth  : Std.string(_controller.outputWidth);
+			var h = pendingHeight != null ? pendingHeight : Std.string(_controller.outputHeight);
+			out.push("-s");
+			out.push('${w}x${h}');
+		}
+
+		return out;
+	}
+
 	private function handleCommandLineArguments(args : Array<String>) {
 		if(args.length == 0) return;
-		
+
+		// Translate --long-form flags before parsing
+		args = normalizeLongArgs(args);
+
 		while(args.length > 0) parseNextArgument(args);
-		
+
 		if(_cmdLineFile == null) throw("No input file specified");
 		if(!_cmdLineFile.exists) throw('${_cmdLineFile.nativePath} does not exist');
-		
+
 		if(_controller.outputFile == null) {
 			_controller.outputFile = _cmdLineFile.parent.resolvePath( _cmdLineFile.name.split(".")[0] + ".mp4" );
 		}
-		
+
 		_cmdLineFile.addEventListener(Event.COMPLETE, function(_) {
-			var job = new SwivelJob(_cmdLineFile, new SwivelSwf(Bytes.ofData(_cmdLineFile.data)) );
+			var swf = new SwivelSwf(Bytes.ofData(_cmdLineFile.data));
+			// Apply optional FPS override before the job is queued
+			if (_cmdLineFps != null && _cmdLineFps > 0) swf.frameRate = _cmdLineFps;
+			var job = new SwivelJob(_cmdLineFile, swf);
 			job.parameters = _cmdLineParams;
 			_controller.jobs.push( job );
 			convertClickHandler(null);

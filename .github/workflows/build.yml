@@ -1,0 +1,107 @@
+name: Build Swivel CLI
+
+on:
+  push:
+    branches: [main, master]
+  release:
+    types: [created]
+
+env:
+  # Update AIR_SDK_VERSION above when upgrading
+  AIR_SDK_VERSION: "51.1.3.1"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # ── Haxe ────────────────────────────────────────────────────────────────
+      - name: Install Haxe 4.3.4
+        uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: 4.3.4
+
+      # The adobe-air (air3) haxelib is required by Swivel.hxml (-lib air3).
+      # It bundles stub externs only — the real AIR SDK is installed separately.
+      - name: Install air3 haxelib
+        run: haxelib install air3 --quiet
+
+      # ── Adobe AIR SDK ────────────────────────────────────────────────────────
+      # Swivel targets AIR 27 (-swf-version 27 / application.xml namespace 27.0).
+      # We download the AIR 51 SDK from HARMAN (the current open-source AIR fork)
+      # which is backward-compatible and includes adt + the Windows AIR runtime.
+      - name: Download HARMAN AIR SDK (Windows)
+        shell: pwsh
+        run: |
+          $sdk_url = "https://airsdk.harman.com/api/versions/${{ env.AIR_SDK_VERSION }}/download/AIR_SDK_Windows_${{ env.AIR_SDK_VERSION }}.zip"
+          Invoke-WebRequest -Uri $sdk_url -OutFile air-sdk.zip -UseBasicParsing
+          Expand-Archive air-sdk.zip -DestinationPath air-sdk
+          echo "AIR_SDK=${{ github.workspace }}\air-sdk" >> $env:GITHUB_ENV
+          echo "${{ github.workspace }}\air-sdk\bin" >> $env:GITHUB_PATH
+
+      # ── Compile SWF ──────────────────────────────────────────────────────────
+      - name: Compile Swivel.swf
+        shell: bash
+        run: |
+          mkdir -p bin
+          haxe Swivel.hxml
+
+      # ── Package Windows AIR bundle ───────────────────────────────────────────
+      # adt -package produces a native Windows installer / bundle.
+      # We use -target bundle so the output is a self-contained folder
+      # containing Swivel.exe (the AIR runtime + SWF embedded).
+      - name: Package with adt
+        shell: pwsh
+        run: |
+          # The certificate bundled in the repo (bat/Swivel.p12, pass: ngswivel!430)
+          # is used for self-signing. This is sufficient for CI artifact builds.
+          & "$env:AIR_SDK\bin\adt.bat" `
+            -package `
+            -storetype pkcs12 `
+            -keystore bat/Swivel.p12 `
+            -storepass "ngswivel!430" `
+            -target bundle `
+            bin/Swivel `
+            application.xml `
+            bin/Swivel.swf `
+            ffmpeg/win32 `
+            ffmpeg/licenses `
+            assets/icons `
+            README.md `
+            LICENSE.md
+
+      # The bundle contains Swivel.exe — rename it to swivel-cli.exe for clarity.
+      - name: Rename binary to swivel-cli.exe
+        shell: pwsh
+        run: |
+          Copy-Item "bin\Swivel\Swivel.exe" "swivel-cli.exe"
+
+      # ── Artifacts ────────────────────────────────────────────────────────────
+      - name: Upload swivel-cli.exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: swivel-cli-windows
+          path: swivel-cli.exe
+
+      # Also upload the full bundle (includes ffmpeg DLLs required at runtime)
+      - name: Upload full bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: swivel-bundle-windows
+          path: bin/Swivel/
+
+      - name: Zip bundle for release
+        if: github.event_name == 'release'
+        shell: pwsh
+        run: Compress-Archive -Path "bin\Swivel\*" -DestinationPath "swivel-cli-${{ github.event.release.tag_name }}.zip"
+
+      - name: Attach to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "swivel-cli-${{ github.event.release.tag_name }}.zip"
