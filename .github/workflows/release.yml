@@ -84,25 +84,16 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path bin | Out-Null
-          adt -package `
-            -storetype pkcs12 `
-            -keystore bat/Swivel.p12 `
-            -storepass "ngswivel!430" `
-            -target bundle `
-            bin/swivel-bundle `
-            application.xml `
-            bin/Swivel.swf `
-            ffmpeg/win32 `
-            ffmpeg/licenses `
-            assets/icons `
-            README.md `
-            LICENSE.md
+          # -tsa none disables timestamp authority (avoids connection failures to Verisign TSA)
+          # Written as a single line to avoid PowerShell backtick-continuation issues
+          adt -package -storetype pkcs12 -keystore bat/Swivel.p12 -storepass "ngswivel!430" -tsa none -target bundle bin/swivel-bundle application.xml bin/Swivel.swf ffmpeg/win32 ffmpeg/licenses assets/icons README.md LICENSE.md
+          if ($LASTEXITCODE -ne 0) { throw "adt exited with code $LASTEXITCODE" }
           if (-not (Test-Path "bin/swivel-bundle/swivel-cli.exe")) {
-            Write-Host "Bundle contents:"
+            Write-Host "bin/ contents after adt:"
             Get-ChildItem -Recurse bin/ | Select-Object FullName
             throw "swivel-cli.exe not found in bundle"
           }
-          Write-Host "Bundle created:"
+          Write-Host "Bundle created successfully:"
           Get-ChildItem -Recurse bin/swivel-bundle | Select-Object Name, Length
 
       # ── 8. Zip bundle → swivel-cli-windows.zip ────────────────────────────
