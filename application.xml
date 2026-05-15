@@ -3,7 +3,7 @@
 	
 	<id>com.newgrounds.swivel.Swivel</id>
 	<versionNumber>1.12</versionNumber>
-	<filename>Swivel</filename>
+	<filename>swivel-cli</filename>
 	
 	<name>Swivel</name>
 	<description>SWF-to-video converter</description>

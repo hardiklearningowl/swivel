@@ -448,10 +448,12 @@ class Swivel extends Application
 		
 		versionText.text = 'v$VERSION - $BUILD_TIME';
 		
-		if(!flash.system.Capabilities.isDebugger) {
+		if(_isCmdLine) {
+			handleCommandLineArguments(cmdLineArguments);
+		} else if(!flash.system.Capabilities.isDebugger) {
 			mainContainer.state = "error";
 			errorText.text = 'Please restart your computer before using Swivel for the first time.\n\nIf this error persists, please e-mail mike@newgrounds.com.';
-		} else if(_isCmdLine) handleCommandLineArguments(cmdLineArguments);
+		}
 	}
 	
 
