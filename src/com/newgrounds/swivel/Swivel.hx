@@ -244,27 +244,33 @@ class Swivel extends Application
 	}
 
 	private function handleCommandLineArguments(args : Array<String>) {
-		if(args.length == 0) return;
+		writeLog('[CLI] handleCommandLineArguments called with: ' + args.join(" "));
+		if(args.length == 0) { writeLog('[CLI] No args, returning'); return; }
 
 		// Translate --long-form flags before parsing
 		args = normalizeLongArgs(args);
 
 		while(args.length > 0) parseNextArgument(args);
 
+		writeLog('[CLI] cmdLineFile=' + (_cmdLineFile != null ? _cmdLineFile.nativePath : "null"));
 		if(_cmdLineFile == null) throw("No input file specified");
 		if(!_cmdLineFile.exists) throw('${_cmdLineFile.nativePath} does not exist');
+		writeLog('[CLI] outputFile=' + (_controller.outputFile != null ? _controller.outputFile.nativePath : "null"));
 
 		if(_controller.outputFile == null) {
 			_controller.outputFile = _cmdLineFile.parent.resolvePath( _cmdLineFile.name.split(".")[0] + ".mp4" );
 		}
 
+		writeLog('[CLI] Loading SWF file...');
 		_cmdLineFile.addEventListener(Event.COMPLETE, function(_) {
+			writeLog('[CLI] SWF loaded, parsing...');
 			var swf = new SwivelSwf(Bytes.ofData(_cmdLineFile.data));
 			// Apply optional FPS override before the job is queued
 			if (_cmdLineFps != null && _cmdLineFps > 0) swf.frameRate = _cmdLineFps;
 			var job = new SwivelJob(_cmdLineFile, swf);
 			job.parameters = _cmdLineParams;
 			_controller.jobs.push( job );
+			writeLog('[CLI] Starting conversion...');
 			convertClickHandler(null);
 		} );
 		_cmdLineFile.load();
@@ -346,6 +352,7 @@ class Swivel extends Application
 	}
 
 	private override function init() : Void {
+		writeLog('[INIT] init() called, _isCmdLine=' + _isCmdLine + ' args=' + (cmdLineArguments != null ? cmdLineArguments.join(" ") : "null"));
 		#if !debug
 			if(!_isCmdLine) ui.add(new SplashScreen());
 		#end
@@ -889,12 +896,25 @@ class Swivel extends Application
 	private function videoNameClickHandler(_) _controller.outputFile.openWithDefaultApplication();
 	private function backClickHandler(_) mainContainer.state = "setup";
 	
+	// Write a diagnostic message to %TEMP%\swivel-cli.log (append)
+	private static function writeLog(msg : String) : Void {
+		try {
+			var logFile = flash.filesystem.File.tempDirectory.resolvePath("swivel-cli.log");
+			var stream = new flash.filesystem.FileStream();
+			stream.open(logFile, flash.filesystem.FileMode.APPEND);
+			stream.writeUTFBytes(msg + "\n");
+			stream.close();
+		} catch(err:Dynamic) {}
+	}
+
 	override private function uncaughtErrorHandler(e) {
 		e.preventDefault();
 		if(!_isCmdLine ) {
 			mainContainer.state = "error";
 			errorText.text = 'Whoa! Something bad happened, and the program blew up. Sorry about that!\nPlease copy and paste this junk and send it to mike@newgrounds.com along with the SWF you were converting:\n\n${Std.string(e.error)}\n${haxe.CallStack.exceptionStack().join("\n")}';
 		} else {
+			writeLog('[ERROR] ' + Std.string(e.error));
+			writeLog('[STACK] ' + haxe.CallStack.exceptionStack().join(" | "));
 			NativeApplication.nativeApplication.exit(-1);
 		}
 	}

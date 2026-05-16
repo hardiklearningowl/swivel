@@ -57,22 +57,25 @@ class FfmpegProcess
 		
 		
 		var ffmpegFile : File = getFfmpegExecutable();
-		
+		Logger.log("FfmpegLog", "Executable: " + ffmpegFile.nativePath + " exists=" + ffmpegFile.exists + "\n");
+
 		var startupInfo = new NativeProcessStartupInfo();
 		startupInfo.executable = ffmpegFile;
 		startupInfo.workingDirectory = ffmpegFile.parent;
-		
+
 		startupInfo.arguments = flash.Vector.ofArray(args);
 		Logger.log("FfmpegLog", Std.string(args) + "\n");
-		
+
 		_ffmpeg = new NativeProcess();
-		
+
 		_ffmpeg.addEventListener(ProgressEvent.STANDARD_INPUT_PROGRESS, onStdinProgress);
 		_ffmpeg.addEventListener(IOErrorEvent.STANDARD_INPUT_IO_ERROR, onStdinError);
 		_ffmpeg.addEventListener(ProgressEvent.STANDARD_ERROR_DATA, onStderr);
 		_ffmpeg.addEventListener(ProgressEvent.STANDARD_OUTPUT_DATA, onStdOutData);
 		_ffmpeg.addEventListener(NativeProcessExitEvent.EXIT, onFfmpegExit);
+		Logger.log("FfmpegLog", "Starting NativeProcess...\n");
 		_ffmpeg.start(startupInfo);
+		Logger.log("FfmpegLog", "NativeProcess started OK\n");
 	}
 	
 	private function getFfmpegExecutable() : File {
@@ -234,12 +237,13 @@ class FfmpegEncoder extends FfmpegProcess
 		var ffmpegFile = FfmpegProcess._ffmpegFolder;
 		switch( flash.system.Capabilities.os.split(" ")[0] ) {
 			case "Windows":
-				_isWindows = true;
-				#if win32
-					ffmpegFile = ffmpegFile.resolvePath("redirecter.exe");
-				#else
-					ffmpegFile = ffmpegFile.resolvePath("redirecter.exe");
-				#end
+				// Do NOT use redirecter.exe: when swivel-cli is spawned as a child
+				// process (e.g. by Electron/Node.js), redirecter.exe's GetStdHandle()
+				// returns the null-device inherited from the parent instead of the
+				// NativeProcess pipe, causing it to exit immediately.
+				// Spawn ffmpeg.exe directly and use the stdin-progress event path.
+				_isWindows = false;
+				ffmpegFile = ffmpegFile.resolvePath("ffmpeg.exe");
 			case "Mac":
 				_isWindows = false;
 				#if mac32

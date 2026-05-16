@@ -181,8 +181,10 @@ class SwivelController extends com.huey.binding.Binding.Bindable implements Cont
 	
 	private function runTask(task : SwivelTask) {
 		_currentJob = null;
+		Logger.log("SwivelLog", "runTask: " + Type.enumConstructor(task));
 		switch(task) {
 			case StartEncoder(outputFile, inputAudioFile):
+				Logger.log("SwivelLog", "StartEncoder: output=" + outputFile.nativePath + " width=" + _recorder.outputWidth + " height=" + _recorder.outputHeight);
 				var ffmpeg = new FfmpegEncoder(videoPreset, videoBitRate, outputFile, _recorder.outputWidth, _recorder.outputHeight, jobs.array[0].swf.frameRate, if(inputAudioFile != null) inputAudioFile.nativePath else null, audioCodec, audioBitRate, if(stereoAudio) 2 else 1);
 				ffmpeg.onComplete.add(onEncodingComplete);
 				_ffmpeg = ffmpeg;
