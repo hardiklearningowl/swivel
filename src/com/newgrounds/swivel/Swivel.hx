@@ -899,7 +899,7 @@ class Swivel extends Application
 	// Write a diagnostic message to %TEMP%\swivel-cli.log (append)
 	private static function writeLog(msg : String) : Void {
 		try {
-			var logFile = flash.filesystem.File.tempDirectory.resolvePath("swivel-cli.log");
+			var logFile = flash.filesystem.File.applicationStorageDirectory.resolvePath("swivel-cli.log");
 			var stream = new flash.filesystem.FileStream();
 			stream.open(logFile, flash.filesystem.FileMode.APPEND);
 			stream.writeUTFBytes(msg + "\n");
