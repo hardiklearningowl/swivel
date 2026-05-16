@@ -180,6 +180,7 @@ class Swivel extends Application
 	private var _cmdLineParams : Dynamic;
 	private var _cmdLineDirectory : File;
 	private var _cmdLineFps : Null<Float>;
+	private var _cmdLineDimensionsSet : Bool = false;
 
 	/**
 	 * Translate long-form CLI flags (--input, --output, --fps, --width, --height)
@@ -238,6 +239,7 @@ class Swivel extends Application
 			var h = pendingHeight != null ? pendingHeight : Std.string(_controller.outputHeight);
 			out.push("-s");
 			out.push('${w}x${h}');
+			_cmdLineDimensionsSet = true;
 		}
 
 		return out;
@@ -267,6 +269,15 @@ class Swivel extends Application
 			var swf = new SwivelSwf(Bytes.ofData(_cmdLineFile.data));
 			// Apply optional FPS override before the job is queued
 			if (_cmdLineFps != null && _cmdLineFps > 0) swf.frameRate = _cmdLineFps;
+			// Default output to SWF's native dimensions when caller did not
+			// pass --width/--height/-s. This preserves the original frame
+			// composition; the previous behaviour was a hard-coded 1920x1080
+			// with scaleMode=crop, which zoomed/cropped non-16:9 stages.
+			if (!_cmdLineDimensionsSet) {
+				_controller.outputWidth = Std.int(swf.width);
+				_controller.outputHeight = Std.int(swf.height);
+				writeLog('[CLI] Using SWF native dimensions: ' + swf.width + 'x' + swf.height);
+			}
 			var job = new SwivelJob(_cmdLineFile, swf);
 			job.parameters = _cmdLineParams;
 			_controller.jobs.push( job );
@@ -285,6 +296,7 @@ class Swivel extends Application
 					var parts = args.shift().split("x");
 					_controller.outputWidth = Std.parseInt(parts[0]);
 					_controller.outputHeight = Std.parseInt(parts[1]);
+					_cmdLineDimensionsSet = true;
 				
 				case "vb":
 					var arg = StringTools.trim(args.shift());
